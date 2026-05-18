@@ -1,0 +1,8 @@
+node_modules
+dist
+.vite
+coverage
+*.tsbuildinfo
+dev-server.log
+dev-server.err
+*.local
