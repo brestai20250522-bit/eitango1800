@@ -11,7 +11,7 @@ import {
   Target,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import wordsData from "./data/words.json";
 import { createQuizSession, selectSessionWords } from "./lib/quiz";
 import { applyAnswer } from "./lib/review";
@@ -37,6 +37,7 @@ type SessionResult = {
 
 const words = wordsData as Word[];
 const SESSION_LIMITS: SessionLimit[] = [10, 20, 50];
+const AUTO_ADVANCE_DELAY_MS = 800;
 
 function pct(value: number, total: number): number {
   return total === 0 ? 0 : Math.round((value / total) * 100);
@@ -120,7 +121,7 @@ export default function App() {
     setProgress((currentProgress) => applyAnswer(currentProgress, current.word, isCorrect, Date.now()));
   }
 
-  function nextQuestion() {
+  const nextQuestion = useCallback(() => {
     if (currentIndex + 1 >= session.length) {
       setSessionComplete(true);
       setAnswerState(null);
@@ -129,7 +130,16 @@ export default function App() {
     }
     setCurrentIndex((index) => index + 1);
     setAnswerState(null);
-  }
+  }, [currentIndex, session.length]);
+
+  useEffect(() => {
+    if (!answerState || view !== "quiz" || sessionComplete) {
+      return;
+    }
+
+    const timer = window.setTimeout(nextQuestion, AUTO_ADVANCE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [answerState, nextQuestion, sessionComplete, view]);
 
   function clearProgress() {
     const confirmed = window.confirm("学習データをリセットしますか？");
@@ -197,7 +207,6 @@ export default function App() {
             sessionComplete={sessionComplete}
             sessionResult={sessionResult}
             chooseAnswer={chooseAnswer}
-            nextQuestion={nextQuestion}
             goHome={goHome}
           />
         )}
@@ -456,7 +465,6 @@ function QuizView({
   sessionComplete,
   sessionResult,
   chooseAnswer,
-  nextQuestion,
   goHome,
 }: {
   session: QuizQuestion[];
@@ -466,7 +474,6 @@ function QuizView({
   sessionComplete: boolean;
   sessionResult: SessionResult;
   chooseAnswer: (answer: string) => void;
-  nextQuestion: () => void;
   goHome: () => void;
 }) {
   if (!meta) {
@@ -547,10 +554,7 @@ function QuizView({
         <div className={answerState?.isCorrect ? "feedback correct" : answerState ? "feedback wrong" : "feedback"}>
           {answerState ? (answerState.isCorrect ? "正解" : `正解は ${current.correctAnswer}`) : ""}
         </div>
-        <button className="primary-command" disabled={!answerState} onClick={nextQuestion} type="button">
-          <ChevronRight aria-hidden="true" />
-          <span>{currentIndex + 1 >= session.length ? "結果" : "次へ"}</span>
-        </button>
+        <span className="auto-next">{answerState ? "次の問題へ進みます" : "答えを選んでください"}</span>
       </div>
     </section>
   );

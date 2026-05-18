@@ -576,6 +576,12 @@ main {
   color: var(--red);
 }
 
+.auto-next {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
 .result-block,
 .empty-state {
   display: grid;
