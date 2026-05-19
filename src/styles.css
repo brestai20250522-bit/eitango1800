@@ -326,6 +326,65 @@ main {
   gap: 14px;
 }
 
+.mode-select {
+  display: grid;
+  gap: 18px;
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.mode-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 160px;
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  text-align: left;
+  box-shadow: var(--shadow-soft);
+}
+
+.mode-card.random .action-icon {
+  background: var(--teal-soft);
+  color: var(--teal);
+}
+
+.mode-card.training .action-icon {
+  background: var(--rose-soft);
+  color: var(--rose);
+}
+
+.mode-card strong {
+  display: block;
+  color: var(--navy);
+  font-size: 23px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.mode-card small {
+  display: block;
+  margin-top: 9px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+.mode-card > svg {
+  width: 28px;
+  height: 28px;
+  color: #344054;
+}
+
 .action-button {
   position: relative;
   display: grid;
@@ -725,6 +784,158 @@ main {
   min-width: 150px;
 }
 
+.training-menu-panel,
+.training-editor {
+  display: grid;
+  gap: 18px;
+}
+
+.training-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.training-menu-card {
+  display: grid;
+  gap: 18px;
+  min-height: 220px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: var(--shadow-soft);
+}
+
+.training-menu-card strong {
+  display: block;
+  color: var(--navy);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.training-menu-card span,
+.training-menu-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.training-menu-card small {
+  font-size: 13px;
+}
+
+.menu-card-actions {
+  display: grid;
+  gap: 8px;
+  align-self: end;
+}
+
+.danger-command {
+  color: var(--rose);
+}
+
+.active-filter {
+  border-color: rgba(0, 121, 111, 0.56);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.menu-name-row {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.menu-name-row label,
+.menu-name-row strong {
+  color: var(--navy);
+  font-weight: 900;
+}
+
+.menu-name-row input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.training-filter-grid {
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.word-picker-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.word-picker-list {
+  display: grid;
+  gap: 8px;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.word-pick-row {
+  display: grid;
+  grid-template-columns: 52px minmax(100px, 1fr) minmax(120px, 1.4fr) minmax(90px, auto) 28px;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text);
+  text-align: left;
+}
+
+.word-pick-row strong,
+.word-pick-row span,
+.word-pick-row small {
+  overflow-wrap: anywhere;
+}
+
+.word-pick-row strong {
+  color: var(--navy);
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.word-pick-row small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.word-pick-row svg {
+  color: #cbd5e1;
+}
+
+.word-pick-row.selected {
+  border-color: rgba(0, 121, 111, 0.56);
+  background: var(--teal-soft);
+}
+
+.word-pick-row.selected svg {
+  color: var(--teal);
+}
+
 .progress-row {
   grid-template-columns: minmax(120px, 170px) 1fr 54px;
 }
@@ -900,10 +1111,15 @@ main {
 
   .action-grid,
   .support-grid,
+  .mode-grid,
   .stats-strip,
   .progress-summary,
   .choice-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .training-menu-grid {
+    grid-template-columns: 1fr;
   }
 
   .scope-grid {
@@ -1023,10 +1239,20 @@ main {
 
   .action-grid,
   .support-grid,
+  .mode-grid,
   .stats-strip,
   .progress-summary,
   .choice-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mode-card {
+    min-height: 140px;
+    padding: 18px;
+  }
+
+  .mode-card strong {
+    font-size: 21px;
   }
 
   .start-test-button {
@@ -1059,6 +1285,28 @@ main {
   .setup-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .menu-name-row {
+    grid-template-columns: 1fr;
+  }
+
+  .word-picker-toolbar {
+    justify-content: stretch;
+  }
+
+  .word-picker-toolbar .primary-command,
+  .word-picker-toolbar .secondary-command {
+    flex: 1 1 100%;
+  }
+
+  .word-pick-row {
+    grid-template-columns: 42px 1fr 28px;
+  }
+
+  .word-pick-row span:not(.word-number),
+  .word-pick-row small {
+    grid-column: 2 / 3;
   }
 
   .start-command {

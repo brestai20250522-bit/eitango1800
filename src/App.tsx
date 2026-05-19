@@ -4,27 +4,31 @@ import {
   CalendarCheck,
   CheckCircle2,
   ChevronRight,
+  Edit3,
   Home,
   ListChecks,
   Play,
   RotateCcw,
+  Save,
   Target,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import wordsData from "./data/words.json";
-import { createQuizSession, selectSessionWords } from "./lib/quiz";
+import { createQuizSession, selectSessionWords, shuffle } from "./lib/quiz";
 import { applyAnswer } from "./lib/review";
 import { getAppStats, type AppStats, type UnitStat } from "./lib/stats";
-import { loadProgress, resetProgress, saveProgress } from "./lib/storage";
-import type { ProgressMap, QuizQuestion, SessionKind, Word } from "./types";
+import { loadProgress, loadTrainingMenus, resetProgress, saveProgress, saveTrainingMenus } from "./lib/storage";
+import type { ProgressMap, QuizQuestion, SessionKind, TrainingMenu, Word } from "./types";
 
-type View = "home" | "testSetup" | "quiz" | "units" | "weak" | "progress";
+type View = "home" | "modeSelect" | "testSetup" | "trainingMenus" | "trainingEdit" | "quiz" | "units" | "weak" | "progress";
 type SessionLimit = 10 | 20 | "unitAll";
 type SessionMeta = {
   kind: SessionKind;
   title: string;
   unit?: string;
+  trainingMenuId?: string;
 };
 type AnswerState = {
   selected: string;
@@ -38,6 +42,7 @@ type SessionResult = {
 const words = wordsData as Word[];
 const SESSION_LIMITS: SessionLimit[] = [10, 20, "unitAll"];
 const AUTO_ADVANCE_DELAY_MS = 800;
+const ALL_UNITS = "all";
 
 function pct(value: number, total: number): number {
   return total === 0 ? 0 : Math.round((value / total) * 100);
@@ -64,9 +69,13 @@ function formatSessionLimit(limit: SessionLimit, hasUnitScope = true): string {
 
 export default function App() {
   const [progress, setProgress] = useState<ProgressMap>(() => loadProgress(words));
+  const [trainingMenus, setTrainingMenus] = useState<TrainingMenu[]>(() => loadTrainingMenus(words));
   const [view, setView] = useState<View>("home");
   const [sessionLimit, setSessionLimit] = useState<SessionLimit>(10);
   const [selectedTestUnit, setSelectedTestUnit] = useState<string | null>(null);
+  const [activeTrainingMenuId, setActiveTrainingMenuId] = useState(trainingMenus[0]?.id ?? "menu-a");
+  const [trainingUnitFilter, setTrainingUnitFilter] = useState<string>(ALL_UNITS);
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
   const [sessionMeta, setSessionMeta] = useState<SessionMeta | null>(null);
   const [session, setSession] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -80,29 +89,38 @@ export default function App() {
   }, [progress]);
 
   useEffect(() => {
+    saveTrainingMenus(trainingMenus);
+  }, [trainingMenus]);
+
+  useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
 
   const stats = useMemo(() => getAppStats(words, progress, nowMs), [progress, nowMs]);
+  const wordById = useMemo(() => new Map(words.map((word) => [word.id, word])), []);
+  const activeTrainingMenu = trainingMenus.find((menu) => menu.id === activeTrainingMenuId) ?? trainingMenus[0];
 
   function goHome() {
     setView("home");
   }
 
   function startSession(kind: SessionKind, unit?: string, limitOverride?: number) {
-    const title =
-      kind === "review"
-        ? "今日の復習"
-        : kind === "test"
-          ? unit
-            ? `${unit}テスト`
-            : "全範囲ランダムテスト"
-          : kind === "new"
-          ? "全範囲ランダムテスト"
-          : kind === "weak"
-            ? "苦手単語"
-            : unit ?? "単元学習";
+    const title = (() => {
+      if (kind === "review") {
+        return "今日の復習";
+      }
+      if (kind === "test" || kind === "new") {
+        return unit ? `${unit}テスト` : "全範囲ランダムテスト";
+      }
+      if (kind === "training") {
+        return "徹底特訓モード";
+      }
+      if (kind === "weak") {
+        return "苦手単語";
+      }
+      return unit ?? "単元学習";
+    })();
     const selectedWords = selectSessionWords(words, progress, {
       kind,
       unit,
@@ -119,6 +137,60 @@ export default function App() {
     setView("quiz");
   }
 
+  function startTrainingMenu(menu: TrainingMenu) {
+    const selectedWords = shuffle(
+      menu.wordIds.map((wordId) => wordById.get(wordId)).filter((word): word is Word => Boolean(word)),
+    );
+
+    setSession(createQuizSession(selectedWords, words));
+    setSessionMeta({ kind: "training", title: `${menu.name} 徹底特訓`, trainingMenuId: menu.id });
+    setCurrentIndex(0);
+    setAnswerState(null);
+    setSessionComplete(false);
+    setSessionResult({ correct: 0, wrong: 0 });
+    setView("quiz");
+  }
+
+  function openTrainingEditor(menuId: string) {
+    setActiveTrainingMenuId(menuId);
+    setTrainingUnitFilter(ALL_UNITS);
+    setShowSelectedOnly(false);
+    setView("trainingEdit");
+  }
+
+  function updateTrainingMenu(menuId: string, updates: Pick<TrainingMenu, "name" | "wordIds">) {
+    setTrainingMenus((menus) =>
+      menus.map((menu) =>
+        menu.id === menuId
+          ? {
+              ...menu,
+              name: updates.name.trim() || menu.name,
+              wordIds: [...new Set(updates.wordIds)],
+              updatedAt: new Date().toISOString(),
+            }
+          : menu,
+      ),
+    );
+  }
+
+  function clearTrainingMenu(menuId: string) {
+    const confirmed = window.confirm("この特訓メニューの単語をすべて削除しますか？");
+    if (!confirmed) {
+      return;
+    }
+    setTrainingMenus((menus) =>
+      menus.map((menu) =>
+        menu.id === menuId
+          ? {
+              ...menu,
+              wordIds: [],
+              updatedAt: new Date().toISOString(),
+            }
+          : menu,
+      ),
+    );
+  }
+
   function chooseAnswer(answer: string) {
     const current = session[currentIndex];
     if (!current || answerState) {
@@ -130,7 +202,9 @@ export default function App() {
       correct: result.correct + (isCorrect ? 1 : 0),
       wrong: result.wrong + (isCorrect ? 0 : 1),
     }));
-    setProgress((currentProgress) => applyAnswer(currentProgress, current.word, isCorrect, Date.now()));
+    if (sessionMeta?.kind !== "training") {
+      setProgress((currentProgress) => applyAnswer(currentProgress, current.word, isCorrect, Date.now()));
+    }
   }
 
   const nextQuestion = useCallback(() => {
@@ -175,7 +249,11 @@ export default function App() {
         </button>
         <nav className="top-nav" aria-label="メイン">
           <button
-            className={view === "home" || view === "testSetup" ? "nav-button active" : "nav-button"}
+            className={
+              view === "home" || view === "modeSelect" || view === "testSetup" || view === "trainingMenus" || view === "trainingEdit"
+                ? "nav-button active"
+                : "nav-button"
+            }
             onClick={goHome}
             type="button"
           >
@@ -209,6 +287,7 @@ export default function App() {
             setView={setView}
           />
         )}
+        {view === "modeSelect" && <ModeSelectView setView={setView} goHome={goHome} />}
         {view === "testSetup" && (
           <TestSetupView
             stats={stats}
@@ -218,6 +297,28 @@ export default function App() {
             setSessionLimit={setSessionLimit}
             startSession={startSession}
             goHome={goHome}
+          />
+        )}
+        {view === "trainingMenus" && (
+          <TrainingMenusView
+            menus={trainingMenus}
+            startTrainingMenu={startTrainingMenu}
+            openTrainingEditor={openTrainingEditor}
+            clearTrainingMenu={clearTrainingMenu}
+            goHome={goHome}
+          />
+        )}
+        {view === "trainingEdit" && activeTrainingMenu && (
+          <TrainingMenuEditor
+            menu={activeTrainingMenu}
+            words={words}
+            units={stats.units}
+            unitFilter={trainingUnitFilter}
+            setUnitFilter={setTrainingUnitFilter}
+            showSelectedOnly={showSelectedOnly}
+            setShowSelectedOnly={setShowSelectedOnly}
+            saveMenu={updateTrainingMenu}
+            backToMenus={() => setView("trainingMenus")}
           />
         )}
         {view === "units" && <UnitsView stats={stats} startSession={startSession} />}
@@ -252,13 +353,13 @@ function HomeView({
   return (
     <div className="view-stack">
       <section className="start-panel" aria-label="テスト開始">
-        <button className="start-test-button" onClick={() => setView("testSetup")} type="button">
+        <button className="start-test-button" onClick={() => setView("modeSelect")} type="button">
           <span className="action-icon">
             <Play aria-hidden="true" />
           </span>
           <span>
             <strong>テストを実施する</strong>
-            <small>全範囲・単元・問題数を選んでスタート</small>
+            <small>ランダム確認か徹底特訓を選んでスタート</small>
           </span>
           <ChevronRight aria-hidden="true" />
         </button>
@@ -298,6 +399,47 @@ function HomeView({
   );
 }
 
+function ModeSelectView({ setView, goHome }: { setView: (view: View) => void; goHome: () => void }) {
+  return (
+    <section className="panel mode-select">
+      <div className="section-heading">
+        <div>
+          <h1>モード選択</h1>
+          <p>目的に合わせて選んでください</p>
+        </div>
+        <button className="secondary-command" onClick={goHome} type="button">
+          <Home aria-hidden="true" />
+          <span>戻る</span>
+        </button>
+      </div>
+
+      <div className="mode-grid">
+        <button className="mode-card random" onClick={() => setView("testSetup")} type="button">
+          <span className="action-icon">
+            <Play aria-hidden="true" />
+          </span>
+          <span>
+            <strong>ランダム確認モード</strong>
+            <small>範囲と問題数を選んでランダム出題。正答率・苦手単語・復習予定に反映されます。</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </button>
+
+        <button className="mode-card training" onClick={() => setView("trainingMenus")} type="button">
+          <span className="action-icon">
+            <Target aria-hidden="true" />
+          </span>
+          <span>
+            <strong>徹底特訓モード</strong>
+            <small>覚えにくい単語だけをメニューに保存して練習。通常の成績データには反映されません。</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function TestSetupView({
   stats,
   selectedUnit,
@@ -328,7 +470,7 @@ function TestSetupView({
     <section className="panel test-setup">
       <div className="section-heading">
         <div>
-          <h1>テスト設定</h1>
+          <h1>ランダム確認モード</h1>
           <p>範囲と問題数を選んでください</p>
         </div>
         <button className="secondary-command" onClick={goHome} type="button">
@@ -389,6 +531,204 @@ function TestSetupView({
           <Play aria-hidden="true" />
           <span>スタート</span>
         </button>
+      </div>
+    </section>
+  );
+}
+
+function TrainingMenusView({
+  menus,
+  startTrainingMenu,
+  openTrainingEditor,
+  clearTrainingMenu,
+  goHome,
+}: {
+  menus: TrainingMenu[];
+  startTrainingMenu: (menu: TrainingMenu) => void;
+  openTrainingEditor: (menuId: string) => void;
+  clearTrainingMenu: (menuId: string) => void;
+  goHome: () => void;
+}) {
+  return (
+    <section className="panel training-menu-panel">
+      <div className="section-heading">
+        <div>
+          <h1>徹底特訓モード</h1>
+          <p>保存したメニューから実施、または単語を編集できます</p>
+        </div>
+        <button className="secondary-command" onClick={goHome} type="button">
+          <Home aria-hidden="true" />
+          <span>戻る</span>
+        </button>
+      </div>
+
+      <div className="training-menu-grid">
+        {menus.map((menu) => (
+          <article className="training-menu-card" key={menu.id}>
+            <div>
+              <strong>{menu.name}</strong>
+              <span>{menu.wordIds.length}語登録</span>
+              <small>{menu.updatedAt ? `${formatDateTime(menu.updatedAt)} 更新` : "未編集"}</small>
+            </div>
+            <div className="menu-card-actions">
+              <button
+                className="primary-command"
+                disabled={menu.wordIds.length === 0}
+                onClick={() => startTrainingMenu(menu)}
+                type="button"
+              >
+                <Play aria-hidden="true" />
+                <span>実施</span>
+              </button>
+              <button className="secondary-command" onClick={() => openTrainingEditor(menu.id)} type="button">
+                <Edit3 aria-hidden="true" />
+                <span>編集</span>
+              </button>
+              <button className="secondary-command danger-command" onClick={() => clearTrainingMenu(menu.id)} type="button">
+                <Trash2 aria-hidden="true" />
+                <span>削除</span>
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TrainingMenuEditor({
+  menu,
+  words,
+  units,
+  unitFilter,
+  setUnitFilter,
+  showSelectedOnly,
+  setShowSelectedOnly,
+  saveMenu,
+  backToMenus,
+}: {
+  menu: TrainingMenu;
+  words: Word[];
+  units: UnitStat[];
+  unitFilter: string;
+  setUnitFilter: (unit: string) => void;
+  showSelectedOnly: boolean;
+  setShowSelectedOnly: (show: boolean) => void;
+  saveMenu: (menuId: string, updates: Pick<TrainingMenu, "name" | "wordIds">) => void;
+  backToMenus: () => void;
+}) {
+  const [draftName, setDraftName] = useState(menu.name);
+  const [draftWordIds, setDraftWordIds] = useState<string[]>(menu.wordIds);
+  const selectedWordIds = useMemo(() => new Set(draftWordIds), [draftWordIds]);
+
+  useEffect(() => {
+    setDraftName(menu.name);
+    setDraftWordIds(menu.wordIds);
+  }, [menu]);
+
+  const visibleWords = useMemo(() => {
+    const scopedWords = unitFilter === ALL_UNITS ? words : words.filter((word) => word.unit === unitFilter);
+    return showSelectedOnly ? scopedWords.filter((word) => selectedWordIds.has(word.id)) : scopedWords;
+  }, [draftWordIds, selectedWordIds, showSelectedOnly, unitFilter, words]);
+
+  function toggleWord(wordId: string) {
+    setDraftWordIds((current) =>
+      current.includes(wordId) ? current.filter((currentWordId) => currentWordId !== wordId) : [...current, wordId],
+    );
+  }
+
+  function saveAndBack() {
+    saveMenu(menu.id, { name: draftName, wordIds: draftWordIds });
+    backToMenus();
+  }
+
+  return (
+    <section className="panel training-editor">
+      <div className="section-heading">
+        <div>
+          <h1>特訓メニュー編集</h1>
+          <p>単元を切り替えながら、練習したい単語だけを選びます</p>
+        </div>
+        <button className="secondary-command" onClick={backToMenus} type="button">
+          <Target aria-hidden="true" />
+          <span>一覧へ</span>
+        </button>
+      </div>
+
+      <div className="menu-name-row">
+        <label htmlFor="training-menu-name">メニュー名</label>
+        <input
+          id="training-menu-name"
+          maxLength={24}
+          onChange={(event) => setDraftName(event.target.value)}
+          type="text"
+          value={draftName}
+        />
+        <strong>{draftWordIds.length}語選択中</strong>
+      </div>
+
+      <div className="setup-section">
+        <h2>表示する単元</h2>
+        <div className="scope-grid training-filter-grid">
+          <button
+            className={unitFilter === ALL_UNITS ? "scope-button active" : "scope-button"}
+            onClick={() => setUnitFilter(ALL_UNITS)}
+            type="button"
+          >
+            <strong>全単元</strong>
+            <span>{words.length}語</span>
+          </button>
+          {units.map((unit) => (
+            <button
+              className={unitFilter === unit.unit ? "scope-button active" : "scope-button"}
+              key={unit.unit}
+              onClick={() => setUnitFilter(unit.unit)}
+              type="button"
+            >
+              <strong>{unit.unit}</strong>
+              <span>{unit.total}語</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="word-picker-toolbar">
+        <button
+          className={showSelectedOnly ? "secondary-command active-filter" : "secondary-command"}
+          onClick={() => setShowSelectedOnly(!showSelectedOnly)}
+          type="button"
+        >
+          <CheckCircle2 aria-hidden="true" />
+          <span>選択済みだけ</span>
+        </button>
+        <button className="secondary-command" onClick={() => setDraftWordIds([])} type="button">
+          <Trash2 aria-hidden="true" />
+          <span>全選択解除</span>
+        </button>
+        <button className="primary-command" onClick={saveAndBack} type="button">
+          <Save aria-hidden="true" />
+          <span>保存</span>
+        </button>
+      </div>
+
+      <div className="word-picker-list">
+        {visibleWords.map((word) => {
+          const selected = selectedWordIds.has(word.id);
+          return (
+            <button
+              className={selected ? "word-pick-row selected" : "word-pick-row"}
+              key={word.id}
+              onClick={() => toggleWord(word.id)}
+              type="button"
+            >
+              <span className="word-number">{word.number}</span>
+              <strong>{word.english}</strong>
+              <span>{word.japanese}</span>
+              <small>{word.unit}</small>
+              <CheckCircle2 aria-hidden="true" />
+            </button>
+          );
+        })}
       </div>
     </section>
   );

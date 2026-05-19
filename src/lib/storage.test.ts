@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reconcileProgress } from "./storage";
+import { reconcileProgress, reconcileTrainingMenus } from "./storage";
 import type { ProgressMap, WordProgress } from "../types";
 
 const saved: WordProgress = {
@@ -39,5 +39,27 @@ describe("progress reconciliation", () => {
       attempts: 3,
       correct: 2,
     });
+  });
+});
+
+describe("training menu reconciliation", () => {
+  const words = [
+    { id: "word-1", number: 1, unit: "まとめて①", english: "white", japanese: "白" },
+    { id: "word-2", number: 2, unit: "まとめて①", english: "twenty", japanese: "20" },
+  ];
+
+  it("keeps three menus and removes word ids that no longer exist", () => {
+    const menus = reconcileTrainingMenus(words, [
+      { id: "menu-a", name: "苦手まとめ", wordIds: ["word-1", "missing", "word-1"], updatedAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+
+    expect(menus).toHaveLength(3);
+    expect(menus[0]).toMatchObject({
+      id: "menu-a",
+      name: "苦手まとめ",
+      wordIds: ["word-1"],
+    });
+    expect(menus[1]).toMatchObject({ id: "menu-b", name: "メニューB", wordIds: [] });
+    expect(menus[2]).toMatchObject({ id: "menu-c", name: "メニューC", wordIds: [] });
   });
 });
