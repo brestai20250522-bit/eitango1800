@@ -20,7 +20,7 @@ import { loadProgress, resetProgress, saveProgress } from "./lib/storage";
 import type { ProgressMap, QuizQuestion, SessionKind, Word } from "./types";
 
 type View = "home" | "quiz" | "units" | "weak" | "progress";
-type SessionLimit = 10 | 20 | 50;
+type SessionLimit = 10 | 20 | "unitAll";
 type SessionMeta = {
   kind: SessionKind;
   title: string;
@@ -36,7 +36,7 @@ type SessionResult = {
 };
 
 const words = wordsData as Word[];
-const SESSION_LIMITS: SessionLimit[] = [10, 20, 50];
+const SESSION_LIMITS: SessionLimit[] = [10, 20, "unitAll"];
 const AUTO_ADVANCE_DELAY_MS = 800;
 
 function pct(value: number, total: number): number {
@@ -53,6 +53,10 @@ function formatDateTime(value: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(value));
+}
+
+function formatSessionLimit(limit: SessionLimit): string {
+  return limit === "unitAll" ? "1単元全問" : `${limit}問`;
 }
 
 export default function App() {
@@ -94,7 +98,7 @@ export default function App() {
     const selectedWords = selectSessionWords(words, progress, {
       kind,
       unit,
-      limit: sessionLimit,
+      limit: sessionLimit === "unitAll" ? words.length : sessionLimit,
       nowMs: Date.now(),
     });
 
@@ -242,7 +246,7 @@ function HomeView({
               onClick={() => setSessionLimit(limit)}
               type="button"
             >
-              {limit}問
+              {formatSessionLimit(limit)}
             </button>
           ))}
         </div>

@@ -56,4 +56,13 @@ describe("quiz question generation", () => {
 
     expect(weak.map((word) => word.id)).toEqual([words[4].id, words[3].id]);
   });
+
+  it("can select every word in one unit when the limit is larger than the unit", () => {
+    const unit = "まとめて①";
+    const unitWords = words.filter((word) => word.unit === unit);
+    const selected = selectSessionWords(words, {}, { kind: "unit", unit, limit: words.length, rng: stableRng });
+
+    expect(selected).toHaveLength(unitWords.length);
+    expect(selected.every((word) => word.unit === unit)).toBe(true);
+  });
 });
