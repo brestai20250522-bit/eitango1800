@@ -73,6 +73,10 @@ export function selectSessionWords(
 ): Word[] {
   const scopedWords = unit ? words.filter((word) => word.unit === unit) : words;
 
+  if (kind === "test") {
+    return shuffle(scopedWords, rng).slice(0, limit);
+  }
+
   if (kind === "review") {
     return scopedWords
       .filter((word) => isDue(progress[word.id], nowMs))

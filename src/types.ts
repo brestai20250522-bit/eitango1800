@@ -30,4 +30,4 @@ export type QuizQuestion = {
   options: string[];
 };
 
-export type SessionKind = "review" | "new" | "weak" | "unit";
+export type SessionKind = "review" | "new" | "weak" | "unit" | "test";

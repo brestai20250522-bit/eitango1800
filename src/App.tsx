@@ -19,7 +19,7 @@ import { getAppStats, type AppStats, type UnitStat } from "./lib/stats";
 import { loadProgress, resetProgress, saveProgress } from "./lib/storage";
 import type { ProgressMap, QuizQuestion, SessionKind, Word } from "./types";
 
-type View = "home" | "quiz" | "units" | "weak" | "progress";
+type View = "home" | "testSetup" | "quiz" | "units" | "weak" | "progress";
 type SessionLimit = 10 | 20 | "unitAll";
 type SessionMeta = {
   kind: SessionKind;
@@ -55,14 +55,18 @@ function formatDateTime(value: string | null): string {
   }).format(new Date(value));
 }
 
-function formatSessionLimit(limit: SessionLimit): string {
-  return limit === "unitAll" ? "1単元全問" : `${limit}問`;
+function formatSessionLimit(limit: SessionLimit, hasUnitScope = true): string {
+  if (limit !== "unitAll") {
+    return `${limit}問`;
+  }
+  return hasUnitScope ? "1単元全問" : "全単元全問";
 }
 
 export default function App() {
   const [progress, setProgress] = useState<ProgressMap>(() => loadProgress(words));
   const [view, setView] = useState<View>("home");
   const [sessionLimit, setSessionLimit] = useState<SessionLimit>(10);
+  const [selectedTestUnit, setSelectedTestUnit] = useState<string | null>(null);
   const [sessionMeta, setSessionMeta] = useState<SessionMeta | null>(null);
   const [session, setSession] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -86,19 +90,23 @@ export default function App() {
     setView("home");
   }
 
-  function startSession(kind: SessionKind, unit?: string) {
+  function startSession(kind: SessionKind, unit?: string, limitOverride?: number) {
     const title =
       kind === "review"
         ? "今日の復習"
-        : kind === "new"
-          ? "新しく学習"
+        : kind === "test"
+          ? unit
+            ? `${unit}テスト`
+            : "全範囲ランダムテスト"
+          : kind === "new"
+          ? "全範囲ランダムテスト"
           : kind === "weak"
             ? "苦手単語"
             : unit ?? "単元学習";
     const selectedWords = selectSessionWords(words, progress, {
       kind,
       unit,
-      limit: sessionLimit === "unitAll" ? words.length : sessionLimit,
+      limit: limitOverride ?? (sessionLimit === "unitAll" ? words.length : sessionLimit),
       nowMs: Date.now(),
     });
 
@@ -166,7 +174,11 @@ export default function App() {
           </span>
         </button>
         <nav className="top-nav" aria-label="メイン">
-          <button className={view === "home" ? "nav-button active" : "nav-button"} onClick={goHome} type="button">
+          <button
+            className={view === "home" || view === "testSetup" ? "nav-button active" : "nav-button"}
+            onClick={goHome}
+            type="button"
+          >
             <Home aria-hidden="true" />
             <span>ホーム</span>
           </button>
@@ -193,10 +205,19 @@ export default function App() {
         {view === "home" && (
           <HomeView
             stats={stats}
+            startSession={startSession}
+            setView={setView}
+          />
+        )}
+        {view === "testSetup" && (
+          <TestSetupView
+            stats={stats}
+            selectedUnit={selectedTestUnit}
+            setSelectedUnit={setSelectedTestUnit}
             sessionLimit={sessionLimit}
             setSessionLimit={setSessionLimit}
             startSession={startSession}
-            setView={setView}
+            goHome={goHome}
           />
         )}
         {view === "units" && <UnitsView stats={stats} startSession={startSession} />}
@@ -221,51 +242,35 @@ export default function App() {
 
 function HomeView({
   stats,
-  sessionLimit,
-  setSessionLimit,
   startSession,
   setView,
 }: {
   stats: AppStats;
-  sessionLimit: SessionLimit;
-  setSessionLimit: (limit: SessionLimit) => void;
   startSession: (kind: SessionKind, unit?: string) => void;
   setView: (view: View) => void;
 }) {
-  const newCount = stats.total - stats.attempted;
-
   return (
     <div className="view-stack">
-      <section className="toolbar-band" aria-label="出題数">
-        <span className="toolbar-label">出題数</span>
-        <div className="segmented" role="group" aria-label="出題数">
-          {SESSION_LIMITS.map((limit) => (
-            <button
-              className={sessionLimit === limit ? "segment active" : "segment"}
-              key={limit}
-              onClick={() => setSessionLimit(limit)}
-              type="button"
-            >
-              {formatSessionLimit(limit)}
-            </button>
-          ))}
-        </div>
+      <section className="start-panel" aria-label="テスト開始">
+        <button className="start-test-button" onClick={() => setView("testSetup")} type="button">
+          <span className="action-icon">
+            <Play aria-hidden="true" />
+          </span>
+          <span>
+            <strong>テストを実施する</strong>
+            <small>全範囲・単元・問題数を選んでスタート</small>
+          </span>
+          <ChevronRight aria-hidden="true" />
+        </button>
       </section>
 
-      <section className="action-grid" aria-label="学習メニュー">
+      <section className="support-grid" aria-label="復習メニュー">
         <ActionButton
           accent="teal"
           count={stats.due}
           icon={<CalendarCheck aria-hidden="true" />}
           label="今日の復習"
           onClick={() => startSession("review")}
-        />
-        <ActionButton
-          accent="amber"
-          count={newCount}
-          icon={<Play aria-hidden="true" />}
-          label="新しく学習"
-          onClick={() => startSession("new")}
         />
         <ActionButton
           accent="blue"
@@ -290,6 +295,102 @@ function HomeView({
         <Metric label="正答率" value={`${stats.accuracy}`} suffix="%" />
       </section>
     </div>
+  );
+}
+
+function TestSetupView({
+  stats,
+  selectedUnit,
+  setSelectedUnit,
+  sessionLimit,
+  setSessionLimit,
+  startSession,
+  goHome,
+}: {
+  stats: AppStats;
+  selectedUnit: string | null;
+  setSelectedUnit: (unit: string | null) => void;
+  sessionLimit: SessionLimit;
+  setSessionLimit: (limit: SessionLimit) => void;
+  startSession: (kind: SessionKind, unit?: string, limitOverride?: number) => void;
+  goHome: () => void;
+}) {
+  const selectedUnitStat = selectedUnit ? stats.units.find((unit) => unit.unit === selectedUnit) : null;
+  const scopeTotal = selectedUnitStat?.total ?? stats.total;
+  const scopeLabel = selectedUnit ?? "全単元";
+  const questionCount = sessionLimit === "unitAll" ? scopeTotal : Math.min(sessionLimit, scopeTotal);
+
+  function startTest() {
+    startSession("test", selectedUnit ?? undefined, questionCount);
+  }
+
+  return (
+    <section className="panel test-setup">
+      <div className="section-heading">
+        <div>
+          <h1>テスト設定</h1>
+          <p>範囲と問題数を選んでください</p>
+        </div>
+        <button className="secondary-command" onClick={goHome} type="button">
+          <Home aria-hidden="true" />
+          <span>戻る</span>
+        </button>
+      </div>
+
+      <div className="setup-section">
+        <h2>1. 出題範囲</h2>
+        <div className="scope-grid">
+          <button
+            className={selectedUnit === null ? "scope-button active" : "scope-button"}
+            onClick={() => setSelectedUnit(null)}
+            type="button"
+          >
+            <strong>全単元</strong>
+            <span>{stats.total}語からランダム</span>
+          </button>
+          {stats.units.map((unit) => (
+            <button
+              className={selectedUnit === unit.unit ? "scope-button active" : "scope-button"}
+              key={unit.unit}
+              onClick={() => setSelectedUnit(unit.unit)}
+              type="button"
+            >
+              <strong>{unit.unit}</strong>
+              <span>{unit.total}語</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="setup-section">
+        <h2>2. 問題数</h2>
+        <div className="segmented setup-segments" role="group" aria-label="問題数">
+          {SESSION_LIMITS.map((limit) => (
+            <button
+              className={sessionLimit === limit ? "segment active" : "segment"}
+              key={limit}
+              onClick={() => setSessionLimit(limit)}
+              type="button"
+            >
+              {formatSessionLimit(limit, Boolean(selectedUnit))}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="setup-actions">
+        <div className="setup-summary">
+          <span>選択中</span>
+          <strong>
+            {scopeLabel}・{questionCount}問
+          </strong>
+        </div>
+        <button className="primary-command start-command" onClick={startTest} type="button">
+          <Play aria-hidden="true" />
+          <span>スタート</span>
+        </button>
+      </div>
+    </section>
   );
 }
 

@@ -65,4 +65,12 @@ describe("quiz question generation", () => {
     expect(selected).toHaveLength(unitWords.length);
     expect(selected.every((word) => word.unit === unit)).toBe(true);
   });
+
+  it("selects random test words from the requested scope", () => {
+    const unit = "10級";
+    const selected = selectSessionWords(words, {}, { kind: "test", unit, limit: 20, rng: stableRng });
+
+    expect(selected).toHaveLength(20);
+    expect(selected.every((word) => word.unit === unit)).toBe(true);
+  });
 });
