@@ -14,7 +14,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import wordsData from "./data/words.json";
 import { createQuizSession, selectSessionWords, shuffle } from "./lib/quiz";
 import { applyAnswer } from "./lib/review";
@@ -43,6 +43,9 @@ const words = wordsData as Word[];
 const SESSION_LIMITS: SessionLimit[] = [10, 20, "unitAll"];
 const AUTO_ADVANCE_DELAY_MS = 800;
 const ALL_UNITS = "all";
+const ACCESS_PASSWORD = "bretan";
+const ACCESS_STORAGE_KEY = "eitango-pwa-access-v1";
+const ACCESS_SESSION_MARKER = accessMarkerFor(ACCESS_PASSWORD);
 
 function pct(value: number, total: number): number {
   return total === 0 ? 0 : Math.round((value / total) * 100);
@@ -67,9 +70,25 @@ function formatSessionLimit(limit: SessionLimit, hasUnitScope = true): string {
   return hasUnitScope ? "1単元全問" : "全単元全問";
 }
 
+function accessMarkerFor(password: string): string {
+  let hash = 0;
+  for (let index = 0; index < password.length; index += 1) {
+    hash = Math.imul(31, hash) + password.charCodeAt(index);
+  }
+  return `v1-${Math.abs(hash).toString(36)}`;
+}
+
+function loadAccessGranted(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(ACCESS_STORAGE_KEY) === ACCESS_SESSION_MARKER;
+}
+
 export default function App() {
   const [progress, setProgress] = useState<ProgressMap>(() => loadProgress(words));
   const [trainingMenus, setTrainingMenus] = useState<TrainingMenu[]>(() => loadTrainingMenus(words));
+  const [accessGranted, setAccessGranted] = useState(() => loadAccessGranted());
   const [view, setView] = useState<View>("home");
   const [sessionLimit, setSessionLimit] = useState<SessionLimit>(10);
   const [selectedTestUnit, setSelectedTestUnit] = useState<string | null>(null);
@@ -103,6 +122,16 @@ export default function App() {
 
   function goHome() {
     setView("home");
+  }
+
+  function unlockApp(password: string): boolean {
+    if (password !== ACCESS_PASSWORD) {
+      return false;
+    }
+    window.localStorage.setItem(ACCESS_STORAGE_KEY, ACCESS_SESSION_MARKER);
+    setAccessGranted(true);
+    setView("home");
+    return true;
   }
 
   function startSession(kind: SessionKind, unit?: string, limitOverride?: number) {
@@ -237,6 +266,14 @@ export default function App() {
     setNowMs(Date.now());
   }
 
+  if (!accessGranted) {
+    return (
+      <div className="app-shell access-shell">
+        <PasswordGate onUnlock={unlockApp} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -338,6 +375,53 @@ export default function App() {
         )}
       </main>
     </div>
+  );
+}
+
+function PasswordGate({ onUnlock }: { onUnlock: (password: string) => boolean }) {
+  const [password, setPassword] = useState("");
+  const [hasError, setHasError] = useState(false);
+
+  function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const ok = onUnlock(password.trim());
+    if (!ok) {
+      setHasError(true);
+      setPassword("");
+      return;
+    }
+    setHasError(false);
+  }
+
+  return (
+    <main className="access-main">
+      <section className="access-card" aria-labelledby="access-title">
+        <span className="access-icon">
+          <BookOpen aria-hidden="true" />
+        </span>
+        <p>塾生専用</p>
+        <h1 id="access-title">BREST英単語</h1>
+        <form className="access-form" onSubmit={submitPassword}>
+          <label htmlFor="access-password">パスワード</label>
+          <input
+            autoComplete="current-password"
+            autoFocus
+            id="access-password"
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setHasError(false);
+            }}
+            placeholder="パスワードを入力"
+            type="password"
+            value={password}
+          />
+          {hasError && <span className="access-error">パスワードが違います</span>}
+          <button className="primary-command" type="submit">
+            <span>入室する</span>
+          </button>
+        </form>
+      </section>
+    </main>
   );
 }
 
