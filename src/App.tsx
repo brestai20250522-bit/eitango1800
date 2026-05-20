@@ -243,7 +243,7 @@ export default function App() {
         <button className="brand" onClick={goHome} type="button" aria-label="ホーム" title="ホーム">
           <BookOpen aria-hidden="true" />
           <span>
-            <strong>英単語1800</strong>
+            <strong>BREST英単語</strong>
             <small>PWA</small>
           </span>
         </button>
@@ -723,7 +723,6 @@ function TrainingMenuEditor({
             >
               <span className="word-number">{word.number}</span>
               <strong>{word.english}</strong>
-              <span>{word.japanese}</span>
               <small>{word.unit}</small>
               <CheckCircle2 aria-hidden="true" />
             </button>

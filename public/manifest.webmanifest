@@ -1,7 +1,7 @@
 {
-  "name": "英単語1800",
-  "short_name": "英単語",
-  "description": "英単語1800の4択復習アプリ",
+  "name": "BREST英単語",
+  "short_name": "BREST英単語",
+  "description": "BREST英単語の4択復習アプリ",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f7f5ee",

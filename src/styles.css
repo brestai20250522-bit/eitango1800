@@ -894,7 +894,7 @@ main {
 
 .word-pick-row {
   display: grid;
-  grid-template-columns: 52px minmax(100px, 1fr) minmax(120px, 1.4fr) minmax(90px, auto) 28px;
+  grid-template-columns: 52px minmax(150px, 1fr) minmax(90px, auto) 28px;
   align-items: center;
   gap: 12px;
   min-height: 62px;
@@ -1304,7 +1304,6 @@ main {
     grid-template-columns: 42px 1fr 28px;
   }
 
-  .word-pick-row span:not(.word-number),
   .word-pick-row small {
     grid-column: 2 / 3;
   }
